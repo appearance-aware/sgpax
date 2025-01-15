@@ -13,7 +13,8 @@ class Satrec(object):
     
     def __init__(self):
         raise NotImplementedError
-    
+        # TODO: Need to initialise all the fields accessed/created in propagation.py
+        
     @property
     def no(self):
         return self.n0
