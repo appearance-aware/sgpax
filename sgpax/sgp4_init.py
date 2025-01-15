@@ -7,7 +7,7 @@ i0 = 1              # Mean inclination at epoch
 e0 = 0.1            # Mean eccentricity at epoch
 w0 = 1              # Mean argument of perigee at epoch
 M0 = 1              # Mean anomaly at epoch
-raan0 = 1          # Mean RAAN at epoch
+raan0 = 1           # Mean RAAN at epoch
 
 Bstar = 0           # Drag coefficient
 ndot = 0            # Time derivative of mean motion
@@ -49,7 +49,7 @@ del1 = d1 / a1**2
 a0 = a1 * (1 - del1/3 - del1**2 - 134/81 * del1**3)
 del0 = d1 / a0**2
 n0_dp = n0 / (1 + del0)
-a0_dp = a0 / (1 - del0)         # Same as a0_dp = (ke / n0_dp)^(2/3)
+a0_dp = a0_dp = (ke / n0_dp)**(2/3)         # Same as a0 / (1 - del0)
 
 # TODO: We should store the resulting n0_dp, a0_dp as the initial
 #       mean motion and semi-major axis in a struct for later computation
@@ -75,8 +75,9 @@ if perigee < 220.0:
     low_altitude = True
     
 # Alter value of s, (q0 - s)^4 for different perigees
+# Standard notation for s star seems to be s4
 qoms24 = qoms2t
-s4 = s                                          # Standard notation for s star
+s4 = s
 if perigee <= 156.0:
     s4 = perigee - 78.0
     if perigee <= 98.0:
@@ -84,7 +85,7 @@ if perigee <= 156.0:
     qoms24 = ((120.0 - s4) * aE / radisuearthkm)**4
     s4 = s4 / radisuearthkm + aE
 
-# Calculate SGP4 constants
+# Calculate SGP4 constants/coefficients
 theta = cosi0
 xi = 1 / (a0_dp - s4)
 beta0 = (1 - e0**2)**(1/2)
@@ -151,7 +152,6 @@ else:
     
 ay_coef = A30 * sini0 / (4 * k2)
 
-
 # Special variable if not in deep space (perigee < 220km)
 if not low_altitude:
     
@@ -169,7 +169,7 @@ if not low_altitude:
 # TODO: Get the time correct
 
 t = 1               # Time now
-t0 = 1              # Time of epoch
+t0 = 0              # Time of epoch
 dt = t - t0         # Time since epoch
 
 
@@ -210,24 +210,138 @@ i = i0
 n = ke / a**(3/2)
 w = w_temp
 raan = raan_DF + raan_coef * dt**2
-Mm = Mp + n0_dp * l_temp            # Mean motion
+Mm = Mp + (n0_dp * l_temp)          # Mean anomaly
 L = Mm + w + raan
 
 # Angle wrapping
-w = jnp.mod(w, 2*jnp.pi)
-raan = jnp.mod(raan, 2*jnp.pi)
-Mm = jnp.mod(Mm, 2*jnp.pi)
-L = jnp.mod(L, 2*jnp.pi)
+twopi = jnp.pi
+w = jnp.mod(w, twopi)
+raan = jnp.mod(raan, twopi)
+Mm = jnp.mod(Mm, twopi)
+L = jnp.mod(L, twopi)
 
 # Check for error in eccentricity and fix for numerical precision
 if (e >= 1.0) or (e < -1e-3):
     raise ValueError("Orbit eccentricity outside of valid bounds.")
 elif (e < 1e-6):
     e = 1e-6
+    
+# TODO: Store the singly averaged mean elements in the struct?
+# These are: e, a, i, raan, w, Mm, n
+# (eccentricity, semi-major axis, inclination, RAAN, arg. perigee, mean anomaly, mean motion)
+# satrec.am = am;
+# satrec.em = em;
+# satrec.im = inclm;
+# satrec.Om = nodem;
+# satrec.om = argpm;
+# satrec.mm = mm;
+# satrec.nm = nm;
 
-# Add the long-period periodic terms
+# ----------- Add the long-period periodic terms -----------
+
 beta = jnp.sqrt(1 - e**2)
-sinincl = jnp.sin(i)
-cosincl = jnp.cos(i)
+ax_N = e * jnp.cos(w)
+ay_NL = A30 * sini0 / (4 * k2 * a * beta**2)
+ay_N = e * jnp.sin(w) + ay_NL
 
-# TODO: Continue from here...
+# TODO: L_L might be taken as zero if not deep space. Unclear?
+if jnp.fabs(1 + theta) > eps:
+    L_L = 0.5 * ay_NL * ax_N * (3 + 5*theta) / (1 + theta)
+else:
+    L_L = 0.5 * ay_NL * ax_N * (3 + 5*theta) / eps
+L_T = L + L_L
+
+# ----------- Solve Kepler's equation for (E + w) -----------
+
+U = jnp.mod(L_T - raan, twopi)
+Ew1 = U
+temp = 9999.9
+k_iter = 1
+
+while (jnp.fabs(temp) >= 1.0e-12) and (k_iter <= 10):
+    
+    # Get the update delta on (E + w)
+    sinEw1 = jnp.sin(Ew1)
+    cosEw1 = jnp.cos(Ew1)
+    denom = 1.0 - ay_N * sinEw1 - ax_N * cosEw1
+    num = U - ay_N * cosEw1 + ax_N * sinEw1 - Ew1
+    temp = num / denom
+    
+    # Regulate update so it's not too large
+    if jnp.fabs(temp) >= 0.95:
+        temp = jnp.sign(temp) * 0.95
+    
+    # Update estimate
+    Ew1 = Ew1 + temp
+    k_iter = k_iter + 1
+    
+E_plus_w = Ew1
+cosEw = jnp.cos(E_plus_w)
+sinEw = jnp.sin(E_plus_w)
+
+# ------------- Short period preliminary quantities -----------
+
+ecosE = ax_N * cosEw + ay_N * sinEw
+esinE = ax_N * sinEw - ay_N * cosEw
+
+eL2 = ax_N**2 + ay_N**2
+pL = a * (1.0 - eL2)
+if pL < 0.0:
+    raise ValueError("Value out of bounds (need a better error message)")
+
+r = a * (1.0 - ecosE)
+rdot = ke * jnp.sqrt(a) / r * esinE
+rfdot = ke * jnp.sqrt(pL) / r
+temp = esinE / (1.0 + jnp.sqrt(1 - eL2))
+cosu = a / r * (cosEw - ax_N + ay_N * temp)
+sinu = a / r * (sinEw - ay_N - ax_N * temp)
+u = jnp.atan2(sinu, cosu)
+
+sin2u = 2 * sinu * cosu
+cos2u = 1 - 2 * sinu**2
+
+# ------------- Updates for short period periodics -----------
+
+delta_r = k2 / (2 * pL) * (1 - theta**2) * cos2u
+delta_u = -k2 / (4 * pL**2) * (7*theta**2 - 1) * sin2u
+delta_raan = 3 * k2 * theta / (2 * pL**2) * sin2u
+delta_i = 3 * k2 * theta / (2 * pL**2) * sini0 * cos2u
+delta_rdot = -k2 * n / pL * (1 - theta**2) * sin2u
+delta_rfdot = k2 * n / pL * ((1 - theta**2) * cos2u - 3/2 * (1 - 3*theta**2))
+
+r_k = r * (1 - 3/2 * k2 * jnp.sqrt(1 - eL2) / pL**2 * (3*theta**2 - 1)) * delta_r
+u_k = u + delta_u
+raan_k = raan + delta_raan
+i_k = i + delta_i
+rdot_k = rdot + delta_rdot
+rfdot_k = rfdot + delta_rfdot
+
+# ------------- Orientation vectors -----------
+
+sinuk = jnp.sin(u_k)
+cosuk = jnp.cos(u_k)
+sinik = jnp.sin(i_k)
+cosik = jnp.cos(i_k)
+sin_raan_k = jnp.sin(raan_k)
+cos_raan_k = jnp.cos(raan_k)
+
+ux = sinuk * (-sin_raan_k * cosik) + cosuk * (cos_raan_k)
+uy = sinuk * (cos_raan_k * cosik) + cosuk * (sin_raan_k)
+uz = sinuk * (sinik)
+
+vx = cosuk * (-sin_raan_k * cosik) - sinuk * (cos_raan_k)
+vy = cosuk * (cos_raan_k * cosik) - sinuk * (sin_raan_k)
+vz = cosuk * (sinik)
+
+uvec = jnp.array([ux, uy, uz])
+vvec = jnp.array([vx, vy, vz])
+
+# ------------- Position and velocity (in km and km/sec) -------------
+
+# TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
+r_eci = r_k * uvec * radisuearthkm
+v_eci = rdot_k * uvec + rfdot_k * vvec
+
+# Check for decaying satellites
+if r_k < 1.0:
+    raise ValueError("Satellite radius has decayed and crashed.")
