@@ -24,9 +24,9 @@ J4 = 1              # Fourth graviational zonal harmonic of Earth
 ke = 1              # sqrt(G*M) where M is mass of the Earth
 
 # SGP4 parameters
-radisuearthkm = 6378.135        # kilometers/Earth radii
-s = aE + 78 / radisuearthkm     # Parameter for the SGP4 density function
-qoms2t = ((120.0 - 78.0) / radisuearthkm)**4
+radiusearthkm = 6378.135        # kilometers/Earth radii
+s = aE + 78 / radiusearthkm     # Parameter for the SGP4 density function
+qoms2t = ((120.0 - 78.0) / radiusearthkm)**4
 
 
 ###########################################################################
@@ -49,7 +49,7 @@ del1 = d1 / a1**2
 a0 = a1 * (1 - del1/3 - del1**2 - 134/81 * del1**3)
 del0 = d1 / a0**2
 n0_dp = n0 / (1 + del0)
-a0_dp = a0_dp = (ke / n0_dp)**(2/3)         # Same as a0 / (1 - del0)
+a0_dp = (ke / n0_dp)**(2/3)         # Same as a0 / (1 - del0)
 
 # TODO: We should store the resulting n0_dp, a0_dp as the initial
 #       mean motion and semi-major axis in a struct for later computation
@@ -70,7 +70,7 @@ eps = 1.5e-12
 
 # Treat low altitudes differently
 low_altitude = False                       # TODO: Store this flag in the satellite struct
-perigee = (a0_dp * (1 - e0) - aE) * radisuearthkm
+perigee = (a0_dp * (1 - e0) - aE) * radiusearthkm
 if perigee < 220.0:
     low_altitude = True
     
@@ -82,8 +82,8 @@ if perigee <= 156.0:
     s4 = perigee - 78.0
     if perigee <= 98.0:
         s4 = 20.0
-    qoms24 = ((120.0 - s4) * aE / radisuearthkm)**4
-    s4 = s4 / radisuearthkm + aE
+    qoms24 = ((120.0 - s4) * aE / radiusearthkm)**4
+    s4 = s4 / radiusearthkm + aE
 
 # Calculate SGP4 constants/coefficients
 theta = cosi0
@@ -339,7 +339,7 @@ vvec = jnp.array([vx, vy, vz])
 # ------------- Position and velocity (in km and km/sec) -------------
 
 # TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
-r_eci = r_k * uvec * radisuearthkm
+r_eci = r_k * uvec * radiusearthkm
 v_eci = rdot_k * uvec + rfdot_k * vvec
 
 # Check for decaying satellites
