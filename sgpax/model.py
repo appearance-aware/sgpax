@@ -1,40 +1,120 @@
 import jax.numpy as jnp
+import jax
+
 
 from sgpax.earth_gravity import wgs72old, wgs72, wgs84
 from sgpax.propagation import sgp4, sgp4init
+from .helper import jday, invjday
+from . import io
+
+import equinox
 
 WGS72OLD = 0
 WGS72 = 1
 WGS84 = 2
+
 gravity_constants = wgs72old, wgs72, wgs84  # indexed using enum values above
 minutes_per_day = 1440.0
 
-class Satrec(object):
-    
-    def __init__(self):
-        raise NotImplementedError
-        # TODO: Need to initialise all the fields accessed/created in propagation.py
-        
-    @property
-    def no(self):
-        return self.n0
-    
-    @property
-    def satnum(self):
-        raise NotImplementedError("Return satellite number as string (from TLE)")
-    
-    @classmethod
-    def twoline2rv(cls, line1, line2, whichconst=WGS72):
-        raise NotImplementedError
-    
-    def sgp4init(self, whichconst, opsmode, satnum, epoch, bstar,
-                 ndot, nddot, ecco, argpo, inclo, mo, no_kozai, nodeo):
+
+class Satrec(equinox.Module):
+    """
+    Class to store SGP4 constants and perform SGP4 propagation
+
+    Follows the API of the python-sgp4 library
+    """
+
+    # TODO: Some of these parameters would be better condensed into structs
+
+    # Orbital parameters
+    n0: float  # Mean motion at epoch
+    i0: float  # Mean inclination at epoch
+    e0: float  # Mean eccentricity at epoch
+    w0: float  # Mean argument of perigee at epoch
+    M0: float  # Mean anomaly at epoch
+    raan0: float  # Mean RAAN at epoch
+    Bstar: float  # Drag coefficient
+    ndot: float  # Time derivative of mean motion
+    nddot: float  # Second time derivative of mean motion
+
+    satnum_str: str  # Satellite name
+
+    # SGP4 parameters
+    jdsatepoch: float  # Julian date of epoch
+    jdsatepochF: float  # Fractional
+    epochyr: float  # Epoch
+    epochdays: float  # Epoch
+    classification: str  # Classification
+
+    # Constants
+    low_altitude: bool
+    eps: float
+    A30: float
+    ke: float
+    k2: float
+    radiusearthkm: float
+    sini0: float
+
+    a0_dp: float
+    n0_dp: float
+
+    eta: float
+    theta: float
+    C1: float
+    C4: float
+    C5: float
+    # Only used for near-earth
+    D2: float  # optional?
+    D3: float  # optional?
+    D4: float  # optional?
+
+    t2_coef: float
+    # Only used for near-earth
+    t3_coef: float  # optional?
+    t4_coef: float  # optional?
+    t5_coef: float  # optional?
+
+    dw_coef: float
+    dM_coef: float
+    raan_coef: float
+
+    M_dot: float
+    w_dot: float
+    raan_dot: float
+
+    # Singly averaged mean elements
+    # am: float
+    # em: float
+    # im: float
+    # Om: float
+    # om: float
+    # mm: float
+    # nm: float
+
+    def __init__(
+        self,
+        whichconst,
+        opsmode,
+        satnum,
+        epoch,
+        bstar,
+        ndot,
+        nddot,
+        ecco,
+        argpo,
+        inclo,
+        mo,
+        no_kozai,
+        nodeo,
+    ):
         """
         Initialise SGP4 constants.
-        
+
         Function copied from https://github.com/brandon-rhodes/python-sgp4
         """
-        
+        if opsmode != "i":
+            raise NotImplementedError("Only improved versions of SGP4 are supported")
+
         whichconst = gravity_constants[whichconst]
         whole, fraction = divmod(epoch, 1.0)
         whole_jd = whole + 2433281.5
@@ -50,24 +130,50 @@ class Satrec(object):
 
         # TODO: Haven't written any of these yet!
         y, m, d, H, M, S = invjday(whole_jd)
-        jan0 = jday(y, 1, 0, 0, 0, 0.0)
+        jan0, _ = jday(y, 1, 0, 0, 0, 0.0)
         self.epochyr = y % 100
         self.epochdays = whole_jd - jan0 + fraction
 
-        self.classification = 'U'
+        self.classification = "U"
 
-        sgp4init(whichconst, opsmode, satnum, epoch, bstar, ndot, nddot,
-                 ecco, argpo, inclo, mo, no_kozai, nodeo, self)
-        
+        sgp4init(
+            whichconst,
+            satnum,
+            bstar,
+            ndot,
+            nddot,
+            ecco,
+            argpo,
+            inclo,
+            mo,
+            no_kozai,
+            nodeo,
+            self,
+        )
+
+    @classmethod
+    def twoline2rv(cls, line1, line2, whichconst=WGS72):
+        return cls(whichconst, 'i', *io.twoline2rv(line1, line2))
+
+    @property
+    def no(self):
+        return self.n0
+
+    @property
+    def satnum(self):
+        return self.satnum_str
+
     def sgp4(self, jd, fr):
-        tsince = ((jd - self.jdsatepoch) * minutes_per_day +
-                  (fr - self.jdsatepochF) * minutes_per_day)
+        tsince = (jd - self.jdsatepoch) * minutes_per_day + (
+            fr - self.jdsatepochF
+        ) * minutes_per_day
         return self.sgp4_tsince(tsince)
-    
+
     def sgp4_tsince(self, tsince):
         r, v = sgp4(self, tsince)
-        return self.error, r, v
-    
+        # TODO: Return Error
+        return r, v
+
     def sgp4_array(self, jd, fr):
         """Compute positions and velocities for the times in a NumPy array.
 
@@ -95,5 +201,5 @@ class Satrec(object):
         r = array(rlist)
         v = array(vlist)
 
-        r.shape = v.shape = len(jd), 3
+        assert r.shape == v.shape == (len(jd), 3)
         return e, r, v
