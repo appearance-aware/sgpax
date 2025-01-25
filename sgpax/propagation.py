@@ -29,7 +29,6 @@ def sgp4init(
     raan0: Mean RAAN at epoch
     satrec: Satellite struct to store the elements
     """
-
     # SGP4 and gravitational parameters
     # aE:   Equatorial radius of Earth (distance units are in Earth radii)
     # J2:   Second graviational zonal harmonic of Earth
@@ -414,7 +413,7 @@ def sgp4(satrec, tsince, whichconst=None):
             1
             - 3 / 2 * satrec.k2 * jnp.sqrt(1 - eL2) / pL**2 * (3 * satrec.theta**2 - 1)
         )
-        * delta_r
+        + delta_r
     )
     u_k = u + delta_u
     raan_k = raan + delta_raan
@@ -445,9 +444,8 @@ def sgp4(satrec, tsince, whichconst=None):
     # ------------- Position and velocity (in km and km/sec) -------------
 
     # TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
+    v_eci = (rdot_k * uvec + rfdot_k * vvec) * satrec.radiusearthkm * satrec.ke;
     r_eci = r_k * uvec * satrec.radiusearthkm
-    v_eci = rdot_k * uvec + rfdot_k * vvec
-
     # Check for decaying satellites
     if r_k < 1.0:
         raise ValueError("Satellite radius has decayed and crashed.")
