@@ -170,6 +170,7 @@ class Satrec(equinox.Module):
         return self.sgp4_tsince(tsince)
 
     def sgp4_tsince(self, tsince):
+        # print(tsince)
         r, v = sgp4(self, tsince)
         # TODO: Return Error
         return r, v
