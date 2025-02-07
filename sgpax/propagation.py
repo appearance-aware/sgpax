@@ -124,7 +124,7 @@ def sgp4init(
         * qoms24
         * xi**4
         * beta0**2
-        * (1 - eta) ** (-7 / 2)
+        * (1 - eta**2) ** (-7 / 2)
         * (
             (2 * eta * (1 + e0 * eta) + 0.5 * e0 + 0.5 * eta**3)
             - 2
@@ -234,6 +234,8 @@ def sgp4init(
     satrec.theta = theta
 
     satrec.C1 = C1
+    satrec.C2 = C2
+    satrec.C3 = C3
     satrec.C4 = C4
     satrec.C5 = C5
     satrec.D2 = D2
@@ -307,7 +309,7 @@ def sgp4(satrec, tsince, whichconst=None):
     L = Mm + w + raan
 
     # Angle wrapping
-    twopi = 2*jnp.pi
+    twopi = 2 * jnp.pi
     w = jnp.mod(w, twopi)
     raan = jnp.mod(raan, twopi)
     Mm = jnp.mod(Mm, twopi)
@@ -440,24 +442,13 @@ def sgp4(satrec, tsince, whichconst=None):
 
     uvec = jnp.array([ux, uy, uz])
     vvec = jnp.array([vx, vy, vz])
-    print("UVEC: ", uvec)
 
     # ------------- Position and velocity (in km and km/sec) -------------
 
     # TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
-    v_eci = (rdot_k * uvec + rfdot_k * vvec) * satrec.radiusearthkm * satrec.ke/60;
+    v_eci = (rdot_k * uvec + rfdot_k * vvec) * satrec.radiusearthkm * satrec.ke / 60
     r_eci = r_k * uvec * satrec.radiusearthkm
     # Check for decaying satellites
     if r_k < 1.0:
         raise ValueError("Satellite radius has decayed and crashed.")
-
-    print("SGPAX VALUES:")
-    print(f"Variable values:")
-    print(f"rdotl: {rdot_k}")
-    print(f"rvdotl: {rfdot_k}")
-    print(f"mvt: {rdot_k}")
-    print(f"rvdot: {rfdot_k}")
-    print(f"mrt: {r_k}")
-    print(f"vkmpersec: {satrec.ke}")
-
     return r_eci, v_eci

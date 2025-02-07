@@ -61,6 +61,8 @@ class Satrec(equinox.Module):
     eta: float
     theta: float
     C1: float
+    C2: float
+    C3: float
     C4: float
     C5: float
     # Only used for near-earth
