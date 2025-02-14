@@ -7,7 +7,7 @@ from sgpax.propagation import sgp4, sgp4init
 from .helper import jday, invjday
 from . import io
 
-import equinox
+import equinox as eqx
 
 WGS72OLD = 0
 WGS72 = 1
@@ -17,11 +17,11 @@ gravity_constants = wgs72old, wgs72, wgs84  # indexed using enum values above
 minutes_per_day = 1440.0
 
 
-class Satrec(equinox.Module):
+class Satrec(eqx.Module):
     """
     Class to store SGP4 constants and perform SGP4 propagation
 
-    Follows the API of the python-sgp4 library
+    Largely follows the API of the python-sgp4 library
     """
 
     # TODO: Some of these parameters would be better condensed into structs
@@ -37,14 +37,14 @@ class Satrec(equinox.Module):
     ndot: float  # Time derivative of mean motion
     nddot: float  # Second time derivative of mean motion
 
-    satnum_str: str  # Satellite name
+    satnum_str: str = eqx.field(static=True)  # Satellite name
 
     # SGP4 parameters
     jdsatepoch: float  # Julian date of epoch
     jdsatepochF: float  # Fractional
     epochyr: float  # Epoch
     epochdays: float  # Epoch
-    classification: str  # Classification
+    classification: str = eqx.field(static=True)  # Classification
 
     # Constants
     low_altitude: bool
@@ -84,15 +84,6 @@ class Satrec(equinox.Module):
     w_dot: float
     raan_dot: float
 
-    # Singly averaged mean elements
-    # am: float
-    # em: float
-    # im: float
-    # Om: float
-    # om: float
-    # mm: float
-    # nm: float
-
     def __init__(
         self,
         whichconst,
@@ -112,10 +103,12 @@ class Satrec(equinox.Module):
         """
         Initialise SGP4 constants.
 
-        Function copied from https://github.com/brandon-rhodes/python-sgp4
+        Function API copied from https://github.com/brandon-rhodes/python-sgp4
         """
         if opsmode != "i":
-            raise NotImplementedError("Only improved versions of SGP4 are supported")
+            raise NotImplementedError(
+                "Only improved versions of SGP4 are supported by sgpax"
+            )
 
         whichconst = gravity_constants[whichconst]
         whole, fraction = divmod(epoch, 1.0)
@@ -130,7 +123,6 @@ class Satrec(equinox.Module):
         self.jdsatepoch = whole_jd
         self.jdsatepochF = fraction
 
-        # TODO: Haven't written any of these yet!
         y, m, d, H, M, S = invjday(whole_jd)
         jan0, _ = jday(y, 1, 0, 0, 0, 0.0)
         self.epochyr = y % 100
@@ -155,7 +147,7 @@ class Satrec(equinox.Module):
 
     @classmethod
     def twoline2rv(cls, line1, line2, whichconst=WGS72):
-        return cls(whichconst, 'i', *io.twoline2rv(line1, line2))
+        return cls(whichconst, "i", *io.twoline2rv(line1, line2))
 
     @property
     def no(self):
@@ -172,10 +164,11 @@ class Satrec(equinox.Module):
         return self.sgp4_tsince(tsince)
 
     def sgp4_tsince(self, tsince):
-        # print(tsince)
-        r, v = sgp4(self, tsince)
-        # TODO: Return Error
-        return r, v
+        e, r, v = sgp4(self, tsince)
+        if e != 0:
+            raise RuntimeError("Error in SGP4: %d" % e)
+
+        return e, r, v
 
     def sgp4_array(self, jd, fr):
         """Compute positions and velocities for the times in a NumPy array.

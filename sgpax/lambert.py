@@ -127,6 +127,9 @@ def lambert_equation_solve(a_input, delta_t, s, c, mu, a_min, tol=1e-20):
 
 
 def plot_residuals(delta_t, s, c, mu):
+    """
+    Mostly a debug function to make sure solver is working as expected
+    """
     import numpy as np
     a_s = np.arange(0, 10, 0.01)
     residuals = [

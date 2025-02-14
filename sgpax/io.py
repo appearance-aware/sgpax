@@ -4,6 +4,7 @@ from datetime import datetime
 
 error_message = "ERROR: {}"
 
+
 def twoline2rv(longstr1, longstr2):
     """Return a Satellite imported from two lines of TLE data.
 
@@ -22,9 +23,7 @@ def twoline2rv(longstr1, longstr2):
     """
 
     deg2rad = pi / 180.0
-    #    0.0174532925199433
     xpdotp = 1440.0 / (2.0 * pi)
-    #  229.1831180523293
 
     line = longstr1.rstrip()
 
@@ -65,7 +64,7 @@ def twoline2rv(longstr1, longstr2):
         ephtype = line[62]
         elnum = int(line[64:68])
     else:
-        raise ValueError(error_message.format(1, LINE1, line))
+        raise ValueError(error_message.format(line))
 
     line = longstr2.rstrip()
 

@@ -2,40 +2,12 @@ from collections import namedtuple
 import jax.numpy as jnp
 
 
-"""
-/* -----------------------------------------------------------------------------
-*
-*                           function getgravconst
-*
-*  this function gets constants for the propagator. note that mu is identified to
-*    facilitiate comparisons with newer models. the common useage is wgs72.
-*
-*  author        : david vallado                  719-573-2600   21 jul 2006
-*
-*  inputs        :
-*    whichconst  - which set of constants to use  wgs72old, wgs72, wgs84
-*
-*  outputs       :
-*    tumin       - minutes in one time unit
-*    mu          - earth gravitational parameter
-*    radiusearthkm - radius of the earth in km
-*    xke         - reciprocal of tumin
-*    j2, j3, j4  - un-normalized zonal harmonic values
-*    j3oj2       - j3 divided by j2
-*
-*  locals        :
-*
-*  coupling      :
-*    none
-*
-*  references    :
-*    norad spacetrack report #3
-*    vallado, crawford, hujsak, kelso  2006
-  --------------------------------------------------------------------------- */
-"""
-
-
 def getgravconst(whichconst):
+    """
+    Get the gravitational constants for a given gravity model
+    Returns:
+    (tumin, mu, radiusearthkm, xke, j2, j3, j4)
+    """
     if whichconst == "wgs72old":
         mu = 398600.79964  #  in km3 / s2
         radiusearthkm = 6378.135  #  km

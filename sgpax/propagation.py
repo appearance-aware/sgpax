@@ -36,7 +36,7 @@ def sgp4init(
     # J4:   Fourth graviational zonal harmonic of Earth
     # ke:   sqrt(G*M) where M is mass of the Earth
     # TODO: Where do tumin and mu get used?!
-    (tumin, mu, radiusearthkm, ke, J2, J3, J4) = whichconst
+    (_ , _, radiusearthkm, ke, J2, J3, J4) = whichconst
     aE = 1.0
 
     s = aE + 78 / radiusearthkm  # Parameter for the SGP4 density function
@@ -113,36 +113,50 @@ def sgp4init(
     )
 
     C1 = Bstar * C2
-
     C3 = 0.0
+
     if e0 > 1e-4:
         C3 = qoms24 * xi**5 * A30 * n0_dp * aE * sini0 / (k2 * e0)
 
-    C4 = (
+    import math
+
+    leading_coef = (
+        2.0 * n0_dp * qoms24 * xi**4 * (1 - e0**2) / math.pow(jnp.fabs(1 - eta**2), 3.5)
+    )
+
+    # -------------------
+    # Don't touch this section if you can avoid it
+    # Seems very sensitive to floating point error accumulation
+    etasq = eta * eta
+    j2 = k2 * 2
+    one_min_thetasq = 1.0 - theta**2
+    leading_coef = (
         2.0
         * n0_dp
         * qoms24
-        * xi**4
-        * beta0**2
-        * (1 - eta**2) ** (-7 / 2)
+        * pow(xi, 4)
+        / math.pow((1 - eta**2), 3.5)
+        * a0_dp
+        * (1.0 - e0**2)
+    )
+
+    C4 = leading_coef * (
+        eta * (2.0 + 0.5 * etasq)
+        + e0 * (0.5 + 2.0 * etasq)
+        - j2
+        * xi
+        / (a0_dp * jnp.fabs(1.0 - etasq))
         * (
-            (2 * eta * (1 + e0 * eta) + 0.5 * e0 + 0.5 * eta**3)
-            - 2
-            * k2
-            * xi
-            / (a0_dp * (1 - eta**2))
-            * (
-                3
-                * (1 - 3 * theta**2)
-                * (1 + 3 / 2 * eta**2 - 2 * e0 * eta - 0.5 * e0 * eta**3)
-                + 3
-                / 4
-                * (1 - theta**2)
-                * (2 * eta**2 - e0 * eta - e0 * eta**3)
-                * jnp.cos(2 * w0)
-            )
+            -3.0
+            * (3 * theta**2 - 1)
+            * (1.0 - 2.0 * e0 * eta + etasq * (1.5 - 0.5 * e0 * eta))
+            + 0.75
+            * one_min_thetasq
+            * (2.0 * etasq - e0 * eta * (1.0 + etasq))
+            * jnp.cos(2.0 * w0)
         )
     )
+    # -------------------
 
     C5 = (
         2
@@ -176,21 +190,19 @@ def sgp4init(
     # Pre-compute a bunch of coefficients
     dw_coef = Bstar * C3 * jnp.cos(w0)
 
-    dM_coef = 0.0
-    if e0 > 1e-4:
-        dM_coef = -2 / 3 * qoms24 * Bstar * xi**4 * aE / (e0 * eta)
+    dM_coef = jnp.where(
+        e0 > 1e-4, -2 / 3 * qoms24 * Bstar * xi**4 * aE / (e0 * eta), 0.0
+    )
 
     raan_coef = -21 / 2 * n0_dp * k2 * theta / (a0_dp**2 * beta0**2) * C1
 
     t2_coef = 3 / 2 * C1
 
     # Handles dividing by zero if inclination is 180 deg
-    if (1 + theta) > eps:
-        LL_coef = A30 * sini0 / (8 * k2) * (3 + 5 * theta) / (1 + theta)
-    else:
-        LL_coef = A30 * sini0 / (8 * k2) * (3 + 5 * theta) / eps
-
-    ay_coef = A30 * sini0 / (4 * k2)
+    # if (1 + theta) > eps:
+    #     LL_coef = A30 * sini0 / (8 * k2) * (3 + 5 * theta) / (1 + theta)
+    # else:
+    #     LL_coef = A30 * sini0 / (8 * k2) * (3 + 5 * theta) / eps
 
     # Special variable if not in deep space (perigee < 220km)
     if not low_altitude:
@@ -203,6 +215,13 @@ def sgp4init(
         t5_coef = (
             1 / 5 * (3 * D4 + 12 * C1 * D3 + 6 * D2**2 + 30 * C1**2 * D2 + 15 * C1**4)
         )
+    else:
+        D2 = 0.0
+        D3 = 0.0
+        D4 = 0.0
+        t3_coef = 0.0
+        t4_coef = 0.0
+        t5_coef = 0.0
 
     satrec.satnum_str = str(satnum)
     satrec.classification = "U"
@@ -256,7 +275,11 @@ def sgp4init(
     satrec.raan_dot = raan_dot
 
 
-def sgp4(satrec, tsince, whichconst=None):
+import jax
+
+
+@jax.jit
+def sgp4(satrec, tsince):
     """TODO: Write doces. tsince = t - t0 is time since epoch (to be calculated)"""
     ## SGP4 - Integrate through time
 
@@ -271,32 +294,44 @@ def sgp4(satrec, tsince, whichconst=None):
     a_temp = 1 - satrec.C1 * tsince
     l_temp = satrec.t2_coef * tsince**2
 
+    # Low altitude modifications
     # For (perigee) altitude higher than 220km
-    Mp = M_DF
-    if not satrec.low_altitude:
 
-        dw = satrec.dw_coef * tsince
-        dM = satrec.dM_coef * (
-            (1 + satrec.eta * jnp.cos(M_DF)) ** 3
-            - (1 + satrec.eta * jnp.cos(satrec.M0)) ** 3
-        )
+    dw = satrec.dw_coef * tsince
+    dM = satrec.dM_coef * (
+        (1 + satrec.eta * jnp.cos(M_DF)) ** 3
+        - (1 + satrec.eta * jnp.cos(satrec.M0)) ** 3
+    )
 
-        Mp += dw + dM
-        w_temp = w_temp - dw - dM
-
-        e_temp = e_temp + satrec.Bstar * satrec.C5 * (jnp.sin(Mp) - jnp.sin(satrec.M0))
-        a_temp = (
+    Mp = jnp.where(satrec.low_altitude, M_DF, M_DF + dw + dM)
+    e_temp = jnp.where(
+        satrec.low_altitude,
+        e_temp,
+        e_temp + satrec.Bstar * satrec.C5 * (jnp.sin(Mp) - jnp.sin(satrec.M0)),
+    )
+    a_temp = jnp.where(
+        satrec.low_altitude,
+        a_temp,
+        (
             a_temp
             - satrec.D2 * tsince**2
             - satrec.D3 * tsince**3
             - satrec.D4 * tsince**4
-        )
-        l_temp = (
+        ),
+    )
+
+    l_temp = jnp.where(
+        satrec.low_altitude,
+        l_temp,
+        (
             l_temp
             + satrec.t3_coef * tsince**3
             + satrec.t4_coef * tsince**4
             + satrec.t5_coef * tsince**5
-        )
+        ),
+    )
+
+    w_temp = jnp.where(satrec.low_altitude, w_temp, w_temp - dw - dM)
 
     # Compute values of orbital elements at time delta tsince
     e = satrec.e0 - e_temp
@@ -311,26 +346,18 @@ def sgp4(satrec, tsince, whichconst=None):
     # Angle wrapping
     twopi = 2 * jnp.pi
     w = jnp.mod(w, twopi)
+
     raan = jnp.mod(raan, twopi)
     Mm = jnp.mod(Mm, twopi)
     L = jnp.mod(L, twopi)
 
     # Check for error in eccentricity and fix for numerical precision
-    if (e >= 1.0) or (e < -1e-3):
-        raise ValueError("Orbit eccentricity outside of valid bounds.")
-    elif e < 1e-6:
-        e = 1e-6
-
-    # Store the singly averaged mean elements in the struct
-    # These are: (eccentricity, semi-major axis, inclination,
-    #             RAAN, arg. perigee, mean anomaly, mean motion)
-    # satrec.am = a
-    # satrec.em = e
-    # satrec.im = i
-    # satrec.Om = raan
-    # satrec.om = w
-    # satrec.mm = Mm
-    # satrec.nm = n
+    # if (e >= 1.0) or (e < -1e-3):
+    #     raise ValueError("Orbit eccentricity outside of valid bounds.")
+    # elif e < 1e-6:
+    #     e = 1e-6
+    error_bit = jnp.where(e >= 1.0, 1, 0)
+    e = jnp.where(e >= 1.0, 1.0 - 1e-6, e)
 
     # ----------- Add the long-period periodic terms -----------
 
@@ -340,10 +367,11 @@ def sgp4(satrec, tsince, whichconst=None):
     ay_N = e * jnp.sin(w) + ay_NL
 
     # TODO: L_L might be taken as zero if not deep space. Unclear?
-    if jnp.fabs(1 + satrec.theta) > satrec.eps:
-        L_L = 0.5 * ay_NL * ax_N * (3 + 5 * satrec.theta) / (1 + satrec.theta)
-    else:
-        L_L = 0.5 * ay_NL * ax_N * (3 + 5 * satrec.theta) / satrec.eps
+    L_L = jnp.where(
+        jnp.fabs(1 + satrec.theta) > satrec.eps,
+        0.5 * ay_NL * ax_N * (3 + 5 * satrec.theta) / (1 + satrec.theta),
+        0.5 * ay_NL * ax_N * (3 + 5 * satrec.theta) / satrec.eps,
+    )
     L_T = L + L_L
 
     # ----------- Solve Kepler's equation for (E + w) -----------
@@ -353,9 +381,11 @@ def sgp4(satrec, tsince, whichconst=None):
     temp = 9999.9
     k_iter = 1
 
-    while (jnp.fabs(temp) >= 1.0e-12) and (k_iter <= 10):
+    loop_tuple = (Ew1, temp, k_iter)
+    condition = lambda tuple: (jnp.linalg.norm(tuple[1]) >= 1.0e-12) | (jnp.linalg.norm(tuple[2]) <= 10)
 
-        # Get the update delta on (E + w)
+    def loop_body(loop_tuple):
+        Ew1, temp, k_iter = loop_tuple
         sinEw1 = jnp.sin(Ew1)
         cosEw1 = jnp.cos(Ew1)
         denom = 1.0 - ay_N * sinEw1 - ax_N * cosEw1
@@ -363,26 +393,24 @@ def sgp4(satrec, tsince, whichconst=None):
         temp = num / denom
 
         # Regulate update so it's not too large
-        if jnp.fabs(temp) >= 0.95:
-            temp = jnp.sign(temp) * 0.95
-
+        temp = jnp.where(jnp.fabs(temp) >= 0.95, jnp.sign(temp) * 0.95, temp)
         # Update estimate
         Ew1 = Ew1 + temp
-        k_iter = k_iter + 1
+        return (Ew1, temp, k_iter + 1)
 
+    (Ew1, temp, k_iter) = jax.lax.while_loop(condition, loop_body, loop_tuple)
     E_plus_w = Ew1
     cosEw = jnp.cos(E_plus_w)
     sinEw = jnp.sin(E_plus_w)
 
-    # ------------- Short period preliminary quantities -----------
 
+    # ------------- Short period preliminary quantities -----------
     ecosE = ax_N * cosEw + ay_N * sinEw
     esinE = ax_N * sinEw - ay_N * cosEw
 
     eL2 = ax_N**2 + ay_N**2
     pL = a * (1.0 - eL2)
-    if pL < 0.0:
-        raise ValueError("Value out of bounds (need a better error message)")
+    error_bit = jnp.where(pL < 0.0, 1, 0)
 
     r = a * (1.0 - ecosE)
     rdot = jnp.sqrt(a) / r * esinE
@@ -448,7 +476,7 @@ def sgp4(satrec, tsince, whichconst=None):
     # TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
     v_eci = (rdot_k * uvec + rfdot_k * vvec) * satrec.radiusearthkm * satrec.ke / 60
     r_eci = r_k * uvec * satrec.radiusearthkm
+
     # Check for decaying satellites
-    if r_k < 1.0:
-        raise ValueError("Satellite radius has decayed and crashed.")
-    return r_eci, v_eci
+    error_bit = jnp.where(r_k < 1.0, 1, 0)
+    return error_bit, r_eci, v_eci
