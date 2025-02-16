@@ -1,7 +1,11 @@
+import jax
 import jax.numpy as jnp
 
+import math
+import functools
 
-def sgp4init(
+# @functools.partial(jax.jit, static_argnums=(1,))
+def init_sgp4(
     whichconst,
     satnum,
     Bstar,
@@ -36,7 +40,7 @@ def sgp4init(
     # J4:   Fourth graviational zonal harmonic of Earth
     # ke:   sqrt(G*M) where M is mass of the Earth
     # TODO: Where do tumin and mu get used?!
-    (_ , _, radiusearthkm, ke, J2, J3, J4) = whichconst
+    (_, _, radiusearthkm, ke, J2, J3, J4) = whichconst
     aE = 1.0
 
     s = aE + 78 / radiusearthkm  # Parameter for the SGP4 density function
@@ -60,8 +64,9 @@ def sgp4init(
     a0_dp = (ke / n0_dp) ** (2 / 3)  # Same as a0 / (1 - del0)
 
     # Check that the satellite is actually in a valid orbit
-    if (e0 > 1.0) or n0_dp < 0.0:
-        raise ValueError("Satellite is not in a valid orbit")
+    # TODO: Bring back error checking after jitting
+    # if (e0 > 1.0) or n0_dp < 0.0:
+    #     raise ValueError("Satellite is not in a valid orbit")
 
     ###########################################################################
 
@@ -73,21 +78,18 @@ def sgp4init(
     eps = 1.5e-12
 
     # Treat low altitudes differently
-    low_altitude = False  # TODO: Store this flag in the satellite struct
     perigee = (a0_dp * (1 - e0) - aE) * radiusearthkm
-    if perigee < 220.0:
-        low_altitude = True
+
+    low_altitude = jnp.where(perigee < 220.0, True, False)
 
     # Alter value of s, (q0 - s)^4 for different perigees
     # Standard notation for s star seems to be s4
     qoms24 = qoms2t
-    s4 = s
-    if perigee <= 156.0:
-        s4 = perigee - 78.0
-        if perigee <= 98.0:
-            s4 = 20.0
-        qoms24 = ((120.0 - s4) * aE / radiusearthkm) ** 4
-        s4 = s4 / radiusearthkm + aE
+    s4 = jnp.where(perigee <= 156.0, perigee - 78.0, s)
+    s4 = jnp.where(perigee <= 98.0, 20.0, s4)
+    qoms24 = jnp.where(
+        perigee <= 98.0, ((120.0 - s4) * aE / radiusearthkm) ** 4, qoms24
+    )
 
     # Calculate SGP4 constants/coefficients
     theta = cosi0
@@ -113,15 +115,12 @@ def sgp4init(
     )
 
     C1 = Bstar * C2
-    C3 = 0.0
-
-    if e0 > 1e-4:
-        C3 = qoms24 * xi**5 * A30 * n0_dp * aE * sini0 / (k2 * e0)
-
-    import math
+    C3 = jnp.where(
+        e0 > 1e-4, qoms24 * xi**5 * A30 * n0_dp * aE * sini0 / (k2 * e0), 0.0
+    )
 
     leading_coef = (
-        2.0 * n0_dp * qoms24 * xi**4 * (1 - e0**2) / math.pow(jnp.fabs(1 - eta**2), 3.5)
+        2.0 * n0_dp * qoms24 * xi**4 * (1 - e0**2) / (jnp.abs(1 - eta**2) ** 3.5)
     )
 
     # -------------------
@@ -135,7 +134,7 @@ def sgp4init(
         * n0_dp
         * qoms24
         * pow(xi, 4)
-        / math.pow((1 - eta**2), 3.5)
+        / ((1 - eta**2) ** 3.5)
         * a0_dp
         * (1.0 - e0**2)
     )
@@ -145,7 +144,7 @@ def sgp4init(
         + e0 * (0.5 + 2.0 * etasq)
         - j2
         * xi
-        / (a0_dp * jnp.fabs(1.0 - etasq))
+        / (a0_dp * jnp.abs(1.0 - etasq))
         * (
             -3.0
             * (3 * theta**2 - 1)
@@ -172,12 +171,18 @@ def sgp4init(
     M_dot = (
         1
         + 3 * k2 * (-1 + 3 * theta**2) / (2 * a0_dp**2 * beta0**3)
-        + 3 * k2**2 * (13 - 78 * theta**2 + 137 * theta**4) / (16 * a0_dp**4 * beta0**7)
+        + 3
+        * k2**2
+        * (13 - 78 * theta**2 + 137 * theta**4)
+        / (16 * a0_dp**4 * beta0**7)
     ) * n0_dp
 
     w_dot = (
         -3 * k2 * (1 - 5 * theta**2) / (2 * a0_dp**2 * beta0**4)
-        + 3 * k2**2 * (7 - 114 * theta**2 + 395 * theta**4) / (16 * a0_dp**4 * beta0**8)
+        + 3
+        * k2**2
+        * (7 - 114 * theta**2 + 395 * theta**4)
+        / (16 * a0_dp**4 * beta0**8)
         + 5 * k4 * (3 - 36 * theta**2 + 49 * theta**4) / (4 * a0_dp**4 * beta0**8)
     ) * n0_dp
 
@@ -198,30 +203,27 @@ def sgp4init(
 
     t2_coef = 3 / 2 * C1
 
-    # Handles dividing by zero if inclination is 180 deg
-    # if (1 + theta) > eps:
-    #     LL_coef = A30 * sini0 / (8 * k2) * (3 + 5 * theta) / (1 + theta)
-    # else:
-    #     LL_coef = A30 * sini0 / (8 * k2) * (3 + 5 * theta) / eps
-
     # Special variable if not in deep space (perigee < 220km)
-    if not low_altitude:
-        D2 = 4 * a0_dp * xi * C1**2
-        D3 = 4 / 3 * a0_dp * xi**2 * (17 * a0_dp + s4) * C1**3
-        D4 = 2 / 3 * a0_dp * xi**3 * (221 * a0_dp + 31 * s4) * C1**4
 
-        t3_coef = D2 + 2 * C1**2
-        t4_coef = 1 / 4 * (3 * D3 + 12 * C1 * D2 + 10 * C1**3)
-        t5_coef = (
-            1 / 5 * (3 * D4 + 12 * C1 * D3 + 6 * D2**2 + 30 * C1**2 * D2 + 15 * C1**4)
-        )
-    else:
-        D2 = 0.0
-        D3 = 0.0
-        D4 = 0.0
-        t3_coef = 0.0
-        t4_coef = 0.0
-        t5_coef = 0.0
+    D2 = jnp.where(low_altitude, 0.0, 4 * a0_dp * xi * C1**2)
+    D3 = jnp.where(
+        low_altitude, 0.0, 4 / 3 * a0_dp * xi**2 * (17 * a0_dp + s4) * C1**3
+    )
+    D4 = jnp.where(
+        low_altitude, 0.0, 2 / 3 * a0_dp * xi**3 * (221 * a0_dp + 31 * s4) * C1**4
+    )
+
+    t3_coef = jnp.where(low_altitude, 0.0, D2 + 2 * C1**2)
+    t4_coef = jnp.where(
+        low_altitude,
+        0.0,
+        1 / 4 * (3 * D3 + 12 * C1 * D2 + 10 * C1**3),
+    )
+    t5_coef = jnp.where(
+        low_altitude,
+        0.0,
+        1 / 5 * (3 * D4 + 12 * C1 * D3 + 6 * D2**2 + 30 * C1**2 * D2 + 15 * C1**4),
+    )
 
     satrec.satnum_str = str(satnum)
     satrec.classification = "U"
@@ -273,10 +275,6 @@ def sgp4init(
     satrec.M_dot = M_dot
     satrec.w_dot = w_dot
     satrec.raan_dot = raan_dot
-
-
-import jax
-
 
 @jax.jit
 def sgp4(satrec, tsince):
@@ -382,7 +380,9 @@ def sgp4(satrec, tsince):
     k_iter = 1
 
     loop_tuple = (Ew1, temp, k_iter)
-    condition = lambda tuple: (jnp.linalg.norm(tuple[1]) >= 1.0e-12) | (jnp.linalg.norm(tuple[2]) <= 10)
+    condition = lambda tuple: (jnp.linalg.norm(tuple[1]) >= 1.0e-12) | (
+        jnp.linalg.norm(tuple[2]) <= 10
+    )
 
     def loop_body(loop_tuple):
         Ew1, temp, k_iter = loop_tuple
@@ -402,7 +402,6 @@ def sgp4(satrec, tsince):
     E_plus_w = Ew1
     cosEw = jnp.cos(E_plus_w)
     sinEw = jnp.sin(E_plus_w)
-
 
     # ------------- Short period preliminary quantities -----------
     ecosE = ax_N * cosEw + ay_N * sinEw

@@ -1,9 +1,11 @@
 import jax.numpy as jnp
 import jax
+import math
+import functools
 
 
 from sgpax.earth_gravity import wgs72old, wgs72, wgs84
-from sgpax.propagation import sgp4, sgp4init
+from sgpax.propagation import sgp4, init_sgp4
 from .helper import jday, invjday
 from . import io
 
@@ -130,7 +132,7 @@ class Satrec(eqx.Module):
 
         self.classification = "U"
 
-        sgp4init(
+        init_sgp4(
             whichconst,
             satnum,
             bstar,
@@ -142,7 +144,7 @@ class Satrec(eqx.Module):
             mo,
             no_kozai,
             nodeo,
-            self,
+            self
         )
 
     @classmethod
@@ -199,3 +201,5 @@ class Satrec(eqx.Module):
 
         assert r.shape == v.shape == (len(jd), 3)
         return e, r, v
+
+
