@@ -1,5 +1,16 @@
-# SGPAX
+<h1 align='center'>SGPax 🚀</h1>
 
-Differentiable SGP4 in JAX.
+**SGPax** is a JAX library for differentiable orbital dynamics routines to support optimising trajectories, 
+propagating uncertainty, machine learning, massively parallelised computation on GPU/TPUs, etc. 
 
-We should be basing this off the revised implementation from 2006: https://celestrak.org/publications/AIAA/2006-6753/.
+# Supported routines
+- SGP4 orbital propagator
+- Lambert's problem solver
+
+# Installation
+```pip
+git clone https://github.com/appearance-aware/sgpax
+cd sgpax
+pip install -r ./requirements.txt
+pip install .
+```

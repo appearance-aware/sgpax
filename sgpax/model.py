@@ -1,4 +1,4 @@
-import jax.numpy as jnp
+import jax
 
 from sgpax.earth_gravity import wgs72old, wgs72, wgs84
 from sgpax.propagation import sgp4, init_sgp4
@@ -24,7 +24,6 @@ class Satrec(eqx.Module):
     """
 
     # TODO: Some of these parameters would be better condensed into structs
-
     # Orbital parameters
     n0: float  # Mean motion at epoch
     i0: float  # Mean inclination at epoch
@@ -129,6 +128,7 @@ class Satrec(eqx.Module):
 
         self.classification = "U"
 
+        # TODO: Look into properly jitting in the future
         init_sgp4(
             whichconst,
             satnum,
@@ -197,9 +197,6 @@ class Satrec(eqx.Module):
 
     def sgp4_tsince(self, tsince):
         e, r, v = sgp4(self, tsince)
-        if e != 0:
-            raise RuntimeError("Error in SGP4: %d" % e)
-
         return e, r, v
 
     def sgp4_array(self, jd, fr):
@@ -215,19 +212,4 @@ class Satrec(eqx.Module):
 
         Function copied from https://github.com/brandon-rhodes/python-sgp4
         """
-        array = self.array
-        if array is None:
-            Satrec.array = jnp.array
-
-        results = []
-        z = list(zip(jd, fr))
-        for jd_i, fr_i in z:
-            results.append(self.sgp4(jd_i, fr_i))
-        elist, rlist, vlist = zip(*results)
-
-        e = array(elist)
-        r = array(rlist)
-        v = array(vlist)
-
-        assert r.shape == v.shape == (len(jd), 3)
-        return e, r, v
+        return jax.vmap(self.sgp4, in_axes=(0, 0))(jd, fr)
