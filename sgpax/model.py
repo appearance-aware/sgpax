@@ -1,11 +1,8 @@
 import jax.numpy as jnp
-import jax
-import math
-import functools
-
 
 from sgpax.earth_gravity import wgs72old, wgs72, wgs84
 from sgpax.propagation import sgp4, init_sgp4
+
 from .helper import jday, invjday
 from . import io
 
@@ -144,7 +141,39 @@ class Satrec(eqx.Module):
             mo,
             no_kozai,
             nodeo,
-            self
+            self,
+        )
+
+    def sgp4init(
+        self,
+        whichconst,
+        opsmode,
+        satnum,
+        epoch,
+        bstar,
+        ndot,
+        nddot,
+        ecco,
+        argpo,
+        inclo,
+        mo,
+        no_kozai,
+        nodeo,
+    ):
+        return self.__init__(
+            whichconst,
+            opsmode,
+            satnum,
+            epoch,
+            bstar,
+            ndot,
+            nddot,
+            ecco,
+            argpo,
+            inclo,
+            mo,
+            no_kozai,
+            nodeo,
         )
 
     @classmethod
@@ -157,6 +186,7 @@ class Satrec(eqx.Module):
 
     @property
     def satnum(self):
+        # TODO: Look into alpha5 encoding stuff
         return self.satnum_str
 
     def sgp4(self, jd, fr):
@@ -201,5 +231,3 @@ class Satrec(eqx.Module):
 
         assert r.shape == v.shape == (len(jd), 3)
         return e, r, v
-
-

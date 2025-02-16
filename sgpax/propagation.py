@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 
-import math
 import functools
 
 # @functools.partial(jax.jit, static_argnums=(1,))
