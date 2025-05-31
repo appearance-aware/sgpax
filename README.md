@@ -11,6 +11,6 @@ propagating uncertainty, machine learning, massively parallelised computation on
 ```pip
 git clone https://github.com/appearance-aware/sgpax
 cd sgpax
-pip install -r ./requirements.txt
-pip install .
+poetry install
+poetry run pytest
 ```

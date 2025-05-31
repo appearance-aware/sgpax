@@ -50,7 +50,7 @@ def test_compare_against_python_sgp4():
         # Compare accuracy
         print("After ", i, "hours")
         position_error_m = (r - jnp.array(vr)) * 1e3
-        assert jnp.linalg.norm(position_error_m) < POSITION_ERROR_THRESHOLD_M
+        assert jnp.linalg.norm(position_error_m) < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
         print("error in position metres", position_error_m)
         vel_error_m = (v - jnp.array(vv)) * 1e3
         print("error in velocity ", vel_error_m)
