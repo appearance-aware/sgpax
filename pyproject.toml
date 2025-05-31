@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "sgpax"
+version = "0.1.0"
+description = "Differentiable orbital routines"
+authors = ["Raghav Mishra <rmis0704@uni.sydney.edu.au>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+equinox = "0.11.7"
+jax = {version="^0.5", extras=["cuda12"]}
+jaxtyping = ">=0.3"
+matplotlib = ">=3.10.0"
+numpy = ">=2.2.1"
+optimistix = ">=0.0.10"
+packaging = ">=24.2"
+pillow = ">=11.1"
+scipy = ">=1.15"
+six = ">=1.17.0"
+
+[tool.poetry.group.test.dependencies]
+sgp4 = "^2.24"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
