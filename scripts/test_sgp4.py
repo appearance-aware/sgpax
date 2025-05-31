@@ -37,7 +37,8 @@ def print_sat_elems(sat, vanilla_sat):
         print(k, v)
 
 
-if __name__ == "__main__":
+def test_compare_against_python_sgp4():
+    POSITION_ERROR_THRESHOLD_M = 0.1
     sat = init_test_from_tle(Satrec)
     v_sat = init_test_from_tle(vSatrec)
 
@@ -48,5 +49,8 @@ if __name__ == "__main__":
         e, r, v = return_result_after_hours(sat, i)
         # Compare accuracy
         print("After ", i, "hours")
-        print("error in position metres", (r - jnp.array(vr)) * 1e3)
-        print("error in velocity ", (v - jnp.array(vv)) * 1e3)
+        position_error_m = (r - jnp.array(vr)) * 1e3
+        assert jnp.linalg.norm(position_error_m) < POSITION_ERROR_THRESHOLD_M
+        print("error in position metres", position_error_m)
+        vel_error_m = (v - jnp.array(vv)) * 1e3
+        print("error in velocity ", vel_error_m)

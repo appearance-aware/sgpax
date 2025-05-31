@@ -20,6 +20,7 @@ six = ">=1.17.0"
 
 [tool.poetry.group.test.dependencies]
 sgp4 = "^2.24"
+pytest = "^8.3.5"
 
 
 [build-system]
