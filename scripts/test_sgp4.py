@@ -1,3 +1,6 @@
+import jax
+jax.config.update("jax_enable_x64",True)
+
 from sgpax.model import Satrec
 from sgpax.helper import jday
 from datetime import datetime, timedelta
