@@ -1,12 +1,10 @@
-import jax
-jax.config.update("jax_enable_x64",True)
-
-from sgpax.model import Satrec
-from sgpax.helper import jday
-from datetime import datetime, timedelta
-
-from sgp4.model import Satrec as vSatrec
 import jax.numpy as jnp
+from sgp4.model import Satrec as vSatrec
+from datetime import datetime, timedelta
+from sgpax.helper import jday
+from sgpax.model import Satrec
+import jax
+jax.config.update("jax_enable_x64", True)
 
 
 def init_test_from_tle(satrec_class):
@@ -53,7 +51,27 @@ def test_compare_against_python_sgp4():
         # Compare accuracy
         print("After ", i, "hours")
         position_error_m = (r - jnp.array(vr)) * 1e3
-        assert jnp.linalg.norm(position_error_m) < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
         print("error in position metres", position_error_m)
         vel_error_m = (v - jnp.array(vv)) * 1e3
         print("error in velocity ", vel_error_m)
+
+        pos_err = jnp.linalg.norm(position_error_m)
+        assert pos_err < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
+
+
+def test_r_derivative():
+    VELOCITY_ERROR_THRESHOLD_M_PER_S = 8
+    sat = init_test_from_tle(Satrec)
+    t = 1.0
+    e, r, v = sat.sgp4_tsince(t)
+    drdt = jax.jacfwd(lambda t: sat.sgp4_tsince(t)[1])
+    gradv = drdt(t)
+    vel_error = (gradv/60 - v)*1e3
+    print("Velocity error via autodiff: ", vel_error)
+    assert jnp.linalg.norm(
+        vel_error) < VELOCITY_ERROR_THRESHOLD_M_PER_S, "Derivative is not accurate enough"
+
+
+if __name__ == "__main__":
+    test_compare_against_python_sgp4()
+    test_r_derivative()

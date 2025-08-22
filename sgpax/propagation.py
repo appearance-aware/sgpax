@@ -4,6 +4,8 @@ import jax.numpy as jnp
 import functools
 
 # @functools.partial(jax.jit, static_argnums=(1,))
+
+
 def init_sgp4(
     whichconst,
     satnum,
@@ -69,7 +71,7 @@ def init_sgp4(
 
     ###########################################################################
 
-    ## SGP4 initialisation
+    # SGP4 initialisation
 
     # sgp4fix divisor for divide by zero check on inclination
     # the old check used 1.0 + cos(pi-1.0e-9), but then compared it to
@@ -119,7 +121,8 @@ def init_sgp4(
     )
 
     leading_coef = (
-        2.0 * n0_dp * qoms24 * xi**4 * (1 - e0**2) / (jnp.abs(1 - eta**2) ** 3.5)
+        2.0 * n0_dp * qoms24 * xi**4 *
+        (1 - e0**2) / (jnp.abs(1 - eta**2) ** 3.5)
     )
 
     # -------------------
@@ -182,7 +185,8 @@ def init_sgp4(
         * k2**2
         * (7 - 114 * theta**2 + 395 * theta**4)
         / (16 * a0_dp**4 * beta0**8)
-        + 5 * k4 * (3 - 36 * theta**2 + 49 * theta**4) / (4 * a0_dp**4 * beta0**8)
+        + 5 * k4 * (3 - 36 * theta**2 + 49 * theta**4) /
+        (4 * a0_dp**4 * beta0**8)
     ) * n0_dp
 
     raan_dot = (
@@ -209,7 +213,8 @@ def init_sgp4(
         low_altitude, 0.0, 4 / 3 * a0_dp * xi**2 * (17 * a0_dp + s4) * C1**3
     )
     D4 = jnp.where(
-        low_altitude, 0.0, 2 / 3 * a0_dp * xi**3 * (221 * a0_dp + 31 * s4) * C1**4
+        low_altitude, 0.0, 2 / 3 * a0_dp *
+        xi**3 * (221 * a0_dp + 31 * s4) * C1**4
     )
 
     t3_coef = jnp.where(low_altitude, 0.0, D2 + 2 * C1**2)
@@ -221,7 +226,8 @@ def init_sgp4(
     t5_coef = jnp.where(
         low_altitude,
         0.0,
-        1 / 5 * (3 * D4 + 12 * C1 * D3 + 6 * D2**2 + 30 * C1**2 * D2 + 15 * C1**4),
+        1 / 5 * (3 * D4 + 12 * C1 * D3 + 6 * D2 **
+                 2 + 30 * C1**2 * D2 + 15 * C1**4),
     )
 
     satrec.satnum_str = str(satnum)
@@ -275,10 +281,11 @@ def init_sgp4(
     satrec.w_dot = w_dot
     satrec.raan_dot = raan_dot
 
+
 @jax.jit
 def sgp4(satrec, tsince):
     """TODO: Write doces. tsince = t - t0 is time since epoch (to be calculated)"""
-    ## SGP4 - Integrate through time
+    # SGP4 - Integrate through time
 
     # Integrate through time
     M_DF = satrec.M0 + satrec.M_dot * tsince
@@ -374,7 +381,7 @@ def sgp4(satrec, tsince):
     # ----------- Solve Kepler's equation for (E + w) -----------
 
     U = jnp.mod(L_T - raan, twopi)
-    Ew1 = U
+    Ew1 = U.flatten()[0]
     temp = 9999.9
     k_iter = 1
 
@@ -392,10 +399,10 @@ def sgp4(satrec, tsince):
         temp = num / denom
 
         # Regulate update so it's not too large
-        temp = jnp.where(jnp.fabs(temp) >= 0.95, jnp.sign(temp) * 0.95, temp)
+        temp = jnp.where(jnp.fabs(jnp.linalg.norm(temp)) >= 0.95, jnp.sign(temp) * 0.95, temp)
         # Update estimate
         Ew1 = Ew1 + temp
-        return (Ew1, temp, k_iter + 1)
+        return (Ew1.flatten()[0], temp.flatten()[0], k_iter + 1)
 
     (Ew1, temp, k_iter) = jax.lax.while_loop(condition, loop_body, loop_tuple)
     E_plus_w = Ew1
@@ -439,7 +446,8 @@ def sgp4(satrec, tsince):
         r
         * (
             1
-            - 3 / 2 * satrec.k2 * jnp.sqrt(1 - eL2) / pL**2 * (3 * satrec.theta**2 - 1)
+            - 3 / 2 * satrec.k2 *
+            jnp.sqrt(1 - eL2) / pL**2 * (3 * satrec.theta**2 - 1)
         )
         + delta_r
     )
@@ -472,7 +480,8 @@ def sgp4(satrec, tsince):
     # ------------- Position and velocity (in km and km/sec) -------------
 
     # TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
-    v_eci = (rdot_k * uvec + rfdot_k * vvec) * satrec.radiusearthkm * satrec.ke / 60
+    v_eci = (rdot_k * uvec + rfdot_k * vvec) * \
+        satrec.radiusearthkm * satrec.ke / 60
     r_eci = r_k * uvec * satrec.radiusearthkm
 
     # Check for decaying satellites

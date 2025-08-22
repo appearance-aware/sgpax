@@ -1,4 +1,5 @@
 import jax
+jax.config.update("jax_enable_x64", True)
 
 from sgpax.earth_gravity import wgs72old, wgs72, wgs84
 from sgpax.propagation import sgp4, init_sgp4

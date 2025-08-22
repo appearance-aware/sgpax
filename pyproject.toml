@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sgpax"
-version = "0.1.0"
+version = "0.1.2"
 description = "Differentiable orbital routines"
 authors = ["Raghav Mishra <rmis0704@uni.sydney.edu.au>"]
 readme = "README.md"
