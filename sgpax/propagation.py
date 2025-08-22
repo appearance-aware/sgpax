@@ -27,11 +27,11 @@ def init_sgp4(
     ndot: Time derivative of mean motion
     nddot: Second time derivative of mean motion
     e0: Mean eccentricity at epoch
-    w0: Mean argument of perigee at epoch
-    i0: Mean inclination at epoch
-    M0: Mean anomaly at epoch
-    n0: Mean motion at epoch
-    raan0: Mean RAAN at epoch
+    w0: Mean argument of perigee at epoch (rad)
+    i0: Mean inclination at epoch (rad)
+    M0: Mean anomaly at epoch (rad)
+    n0: Mean motion at epoch (rad/min)
+    raan0: Mean RAAN at epoch (rad)
     satrec: Satellite struct to store the elements
     """
     # SGP4 and gravitational parameters
