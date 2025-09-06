@@ -404,7 +404,7 @@ def sgp4(satrec, tsince):
         Ew1 = Ew1 + temp
         return (Ew1.flatten()[0], temp.flatten()[0], k_iter + 1)
 
-    (Ew1, temp, k_iter) = jax.lax.while_loop(condition, loop_body, loop_tuple)
+    (Ew1, temp, k_iter) = jax.lax.fori_loop(0, 10, lambda i, tuple: loop_body(tuple), loop_tuple)
     E_plus_w = Ew1
     cosEw = jnp.cos(E_plus_w)
     sinEw = jnp.sin(E_plus_w)
