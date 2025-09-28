@@ -12,7 +12,7 @@ for sat in ["Hubble", "Sentinel-6", "CloudSat"]:
     
     # Compute errors over time
     test_results = test_compare_against_python_sgp4(
-        satname=sat, verbose=False, nevalpoints=201
+        satname=sat, verbose=False, nevalpoints=201, return_results=True
     )
 
     hours = test_results["time_hours"]

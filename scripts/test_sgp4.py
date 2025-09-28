@@ -32,6 +32,7 @@ def test_compare_against_python_sgp4(
     satname="Hubble", 
     nevalpoints=11,
     verbose=True, 
+    return_results=False
 ):
     
     sat1 = init_from_tle(Satrec, satname)
@@ -64,17 +65,25 @@ def test_compare_against_python_sgp4(
         r_errors.append(position_error_mag)
         v_errors.append(velocity_error_mag)
         
+        # Test for discrepancy
         POSITION_ERROR_THRESHOLD_M = 0.1
-        assert position_error_mag < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
+        VELOCITY_ERROR_THRESHOLD_MS = 0.01
         
-    return {
-        "pos_errors": r_errors, 
-        "vel_errors": v_errors,
-        "time_hours": hours,
-    }
+        assert position_error_mag < POSITION_ERROR_THRESHOLD_M, \
+            "Not accurate enough compared to reference!"
+        assert velocity_error_mag < VELOCITY_ERROR_THRESHOLD_MS, \
+            "Not accurate enough compared to reference!"
+    
+    # Option to return results if not using PyTest
+    if return_results:
+        return {
+            "pos_errors": r_errors, 
+            "vel_errors": v_errors,
+            "time_hours": hours,
+        }
         
 
-def test_r_derivative(satname="Hubble", verbose=True):
+def test_r_derivative(satname="Hubble"):
     
     # Simulate for 1.0 minute
     time = 1.0
@@ -87,12 +96,12 @@ def test_r_derivative(satname="Hubble", verbose=True):
     vel_error = (gradv/60 - v)*1e3
     error_mag = jnp.linalg.norm(vel_error)
     
-    print("Velocity error via autodiff: (m/s)", vel_error)
+    print("Velocity error via autodiff: (m/s)", error_mag)
     
-    VELOCITY_ERROR_THRESHOLD_M_PER_S = 1 #TODO: Need better accuracy threshold?
+    VELOCITY_ERROR_THRESHOLD_M_PER_S = 0.1
     assert error_mag < VELOCITY_ERROR_THRESHOLD_M_PER_S, "Derivative is not accurate enough"
 
 
 if __name__ == "__main__":
-    test_compare_against_python_sgp4(verbose=False)
-    test_r_derivative(verbpse=False)
+    test_compare_against_python_sgp4()
+    test_r_derivative()
