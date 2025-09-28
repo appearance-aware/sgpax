@@ -1,59 +1,34 @@
-import jax
-jax.config.update("jax_enable_x64", True)
-
-import jax.numpy as jnp
-from datetime import datetime, timedelta
-
-from sgp4.model import Satrec as Satrec_original
-from sgpax.helper import jday
-from sgpax.model import Satrec
-
 import scienceplots
 import matplotlib.pyplot as plt
+
 plt.style.use(["science", "ieee"])
 
+from test_sgp4 import test_compare_against_python_sgp4
 
-def init_test_from_tle(satrec_class):
-    # Hubble TLE
-    sat = satrec_class.twoline2rv(
-        "1 20580U 90037B   24225.65602021  .00023092  00000-0  10739-2 0  9999",
-        "2 20580  28.4696 326.5721 0001735 301.1506  58.8917 15.18616974685623",
+# Set up the plot
+_, axs = plt.subplots(nrows=2, ncols=1)
+
+for sat in ["Hubble", "Sentinel-6", "CloudSat"]:
+    
+    # Compute errors over time
+    test_results = test_compare_against_python_sgp4(
+        satname=sat, verbose=False, nevalpoints=201
     )
-    return sat
 
+    hours = test_results["time_hours"]
+    r_errors = test_results["pos_errors"]
+    v_errors = test_results["vel_errors"]
 
-def print_sat_elems(sat, vanilla_sat):
-    # Sort alphabetically and print
-    for slot in sorted(vanilla_sat.__slots__):
-        try:
-            print(slot, getattr(vanilla_sat, slot))
-        except:
-            pass
+    # Make the plot
+    axs[0].plot(hours, r_errors, label=sat)
+    axs[1].plot(hours, v_errors, label=sat)
 
-    for k, v in sorted(sat.__dict__.items()):
-        print(k, v)
+axs[1].set_xlabel("Time (hours from epoch)")
+axs[0].set_ylabel("Position error (m)")
+axs[1].set_ylabel("Velocity error (m/s)")
+axs[0].set_yscale("log")
+axs[1].set_yscale("log")
+plt.legend()
 
-
-if __name__ == "__main__":
-    sat = init_test_from_tle(Satrec)
-    v_sat = init_test_from_tle(Satrec_original)
-
-    minutes = list(range(0, 24 * 60, 1))
-    errors = []
-    for i in minutes:
-        ve, vr, vv = v_sat.sgp4_tsince(i)
-        e, r, v = sat.sgp4_tsince(i)
-        # Compare accuracy
-        print("After ", i, "hours")
-        position_error_m = (r - jnp.array(vr)) * 1e3
-        print("error in position metres", position_error_m)
-        vel_error_m = (v - jnp.array(vv)) * 1e3
-        print("error in velocity ", vel_error_m)
-
-        pos_err = jnp.linalg.norm(position_error_m)
-        errors.append(pos_err)
-
-    plt.plot(minutes, errors)
-    plt.xlabel("Time (minutes)")
-    plt.ylabel("Absolute error (metres)")
-    plt.savefig("error_plot.png")
+plt.tight_layout()
+plt.savefig("test_error.pdf")
