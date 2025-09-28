@@ -3,11 +3,12 @@ jax.config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
 
-from sgp4.model import Satrec as Satrec_nondiff
 from sgpax.model import Satrec
+from sgp4.model import Satrec as Satrec_nondiff
 
-from datetime import datetime, timedelta
-from sgpax.helper import jday
+import scienceplots
+import matplotlib.pyplot as plt
+plt.style.use(["science", "ieee"])
 
 
 def init_from_tle(satrec_class, satname="Hubble"):
@@ -20,47 +21,20 @@ def init_from_tle(satrec_class, satname="Hubble"):
         raise ValueError(f"Unknown satellite {satname}.")
     return satrec_class.twoline2rv(tle[0], tle[1])
 
-def return_result_after_hours(sat, hours):
-    # time_beginning = datetime(2024, 8, 18, 12, 30, 0)
-    time_beginning = datetime(2024, 8, 12, 15, 44, 40, 146144)
-    delta_t = hours * 60 * 60.0
-    dt = time_beginning + timedelta(seconds=delta_t)
-    jd, fr = jday(
-        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond * 1e-6
-    )
-    # return sat.sgp4(jd, fr)
-    
-    epoch = 27253.656020210125
-    whole, fraction = divmod(epoch, 1.0)
-    whole_jd = whole + 2433281.5
-    jdsatepoch = whole_jd
-    jdsatepochF = fraction
-    
-    minutes_per_day = 1440.0
-    tsince = (jd - jdsatepoch) * minutes_per_day + (
-        fr - jdsatepochF
-    ) * minutes_per_day
-    
-    print("Computed tsince (hrs): ", tsince / 60.0)
-    return sat.sgp4_tsince(tsince)
-
-
-def test_compare_against_python_sgp4(satname="Hubble"):
+def test_compare_against_python_sgp4(satname="Hubble", verbose=True, doplot=True):
     
     sat1 = init_from_tle(Satrec, satname)
     sat2 = init_from_tle(Satrec_nondiff, satname)
 
-    for i in [0]: #range(1, 40, 10):
+    r_errors = []
+    v_errors = []
+    hours = jnp.linspace(0, 48, 11)
+    for i in hours:
         
         # Compute position and velocity
         elapsed_minutes = i * 60.0
         _, r1, v1 = sat1.sgp4_tsince(elapsed_minutes)
         _, r2, v2 = sat2.sgp4_tsince(elapsed_minutes)
-        
-        # TODO: Why does this lead to worse error?
-        # TODO: It change the values for our one, but not for original SGP4
-        # _, r1, v1 = sat1.sgp4_tsince(elapsed_minutes)
-        # _, r2, v2 = return_result_after_hours(sat1, i)
         r2, v2 = jnp.array(r2), jnp.array(v2)
         
         # Compare accuracy
@@ -69,14 +43,30 @@ def test_compare_against_python_sgp4(satname="Hubble"):
         position_error_mag = jnp.linalg.norm(position_error_m)
         velocity_error_mag = jnp.linalg.norm(velocity_error_ms)
         
-        print("After ", i, "hours")
-        print("Error in position (m):      ", position_error_m)
-        print("Error in velocity (m/s):    ", velocity_error_ms)
-        print("Total position error (m):   ", position_error_mag)
-        print("Total velocity error (m/s): ", velocity_error_mag, "\n")
+        if verbose:
+            print("After ", i, "hours")
+            print("Error in position (m):      ", position_error_m)
+            print("Error in velocity (m/s):    ", velocity_error_ms)
+            print("Total position error (m):   ", position_error_mag)
+            print("Total velocity error (m/s): ", velocity_error_mag, "\n")
+        
+        r_errors.append(position_error_mag)
+        v_errors.append(velocity_error_mag)
         
         POSITION_ERROR_THRESHOLD_M = 0.1
-        # assert position_error_mag < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
+        assert position_error_mag < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
+        
+    # Plot errors over time
+    if doplot:
+        _, axs = plt.subplots(nrows=2, ncols=1)
+        axs[0].plot(hours, r_errors)
+        axs[1].plot(hours, v_errors)
+        axs[1].set_xlabel("Time (hours from epoch)")
+        axs[0].set_ylabel("Position error (m)")
+        axs[1].set_ylabel("Velocity error (m/s)")
+        axs[0].set_yscale("log")
+        plt.savefig("test_error.png")
+
 
 def test_r_derivative(satname="Hubble"):
     
@@ -91,22 +81,14 @@ def test_r_derivative(satname="Hubble"):
     vel_error = (gradv/60 - v)*1e3
     error_mag = jnp.linalg.norm(vel_error)
     
-    print("Velocity error via autodiff: ", vel_error)
+    print("Velocity error via autodiff: (m/s)", vel_error)
     
-    VELOCITY_ERROR_THRESHOLD_M_PER_S = 8 # Why are we ok with 8m/s error?
+    VELOCITY_ERROR_THRESHOLD_M_PER_S = 8 # TODO: Why are we ok with 8m/s error?
     assert error_mag < VELOCITY_ERROR_THRESHOLD_M_PER_S, "Derivative is not accurate enough"
 
 
 if __name__ == "__main__":
-    test_compare_against_python_sgp4()
-    # test_r_derivative()
-    
-    
-"""
-There is an initial error in the velocity of the spacecraft (not position).
-Things to check when back from walk are as follows:
-
-- Is the computed julian date epoch the same in both methods?
-- Are there steps in the velocity computation that are wrong?
-- Does velocity get worse over time? Make the plot
-"""
+    # Change doplot to True to get error plots.
+    # Might also want to increase the number of plotting points
+    test_compare_against_python_sgp4(verbose=True, doplot=False)
+    test_r_derivative()

@@ -40,7 +40,6 @@ def init_sgp4(
     # J3:   Third graviational zonal harmonic of Earth
     # J4:   Fourth graviational zonal harmonic of Earth
     # ke:   sqrt(G*M) where M is mass of the Earth
-    # TODO: Where do tumin and mu get used?!
     (_, _, radiusearthkm, ke, J2, J3, J4) = whichconst
     aE = 1.0
 
@@ -370,7 +369,6 @@ def sgp4(satrec, tsince):
     ay_NL = satrec.A30 * satrec.sini0 / (4 * satrec.k2 * a * beta**2)
     ay_N = e * jnp.sin(w) + ay_NL
 
-    # TODO: L_L might be taken as zero if not deep space. Unclear?
     L_L = jnp.where(
         jnp.fabs(1 + satrec.theta) > satrec.eps,
         0.5 * ay_NL * ax_N * (3 + 5 * satrec.theta) / (1 + satrec.theta),
@@ -454,8 +452,14 @@ def sgp4(satrec, tsince):
     u_k = u + delta_u
     raan_k = raan + delta_raan
     i_k = i + delta_i
-    rdot_k = rdot + delta_rdot
-    rfdot_k = rfdot + delta_rfdot
+    
+    # Comparison with the existing SGP4 implementation in Python
+    # implies that we need to divide by ke. This is not in the
+    # original SpaceTrack Report 3 equations/FORTRAN code, but it
+    # is in newer implementations of SGP4. See for example:
+    # https://github.com/CelesTrak/fundamentals-of-astrodynamics/blob/main/software/cpp/SGP4/SGP4/SGP4.cpp#L2002
+    rdot_k = rdot + delta_rdot / satrec.ke
+    rfdot_k = rfdot + delta_rfdot / satrec.ke
 
     # ------------- Orientation vectors -----------
 
@@ -479,9 +483,8 @@ def sgp4(satrec, tsince):
 
     # ------------- Position and velocity (in km and km/sec) -------------
 
-    # TODO: Check scaling/units here, might need to multiply vel by (vkmpersec / ke)
-    v_eci = (rdot_k * uvec + rfdot_k * vvec) * \
-        satrec.radiusearthkm * satrec.ke / 60
+    vkmpersec = satrec.radiusearthkm * satrec.ke / 60.0
+    v_eci = (rdot_k * uvec + rfdot_k * vvec) * vkmpersec
     r_eci = r_k * uvec * satrec.radiusearthkm
 
     # Check for decaying satellites

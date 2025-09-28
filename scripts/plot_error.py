@@ -8,6 +8,7 @@ from sgp4.model import Satrec as Satrec_original
 from sgpax.helper import jday
 from sgpax.model import Satrec
 
+import scienceplots
 import matplotlib.pyplot as plt
 plt.style.use(["science", "ieee"])
 
@@ -19,16 +20,6 @@ def init_test_from_tle(satrec_class):
         "2 20580  28.4696 326.5721 0001735 301.1506  58.8917 15.18616974685623",
     )
     return sat
-
-
-def return_result_after_minutes(sat, minutes):
-    time_beginning = datetime(2024, 8, 18, 12, 30, 0)
-    delta_t = minutes * 60.0
-    dt = time_beginning + timedelta(seconds=delta_t)
-    jd, fr = jday(
-        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond * 1e-6
-    )
-    return sat.sgp4(jd, fr)
 
 
 def print_sat_elems(sat, vanilla_sat):
@@ -50,8 +41,8 @@ if __name__ == "__main__":
     minutes = list(range(0, 24 * 60, 1))
     errors = []
     for i in minutes:
-        ve, vr, vv = return_result_after_minutes(v_sat, i)
-        e, r, v = return_result_after_minutes(sat, i)
+        ve, vr, vv = v_sat.sgp4_tsince(i)
+        e, r, v = sat.sgp4_tsince(i)
         # Compare accuracy
         print("After ", i, "hours")
         position_error_m = (r - jnp.array(vr)) * 1e3
