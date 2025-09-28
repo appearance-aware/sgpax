@@ -89,7 +89,7 @@ def test_r_derivative(satname="Hubble", verbose=True):
     
     print("Velocity error via autodiff: (m/s)", vel_error)
     
-    VELOCITY_ERROR_THRESHOLD_M_PER_S = 8 # TODO: Why are we ok with 8m/s error?
+    VELOCITY_ERROR_THRESHOLD_M_PER_S = 1 #TODO: Need better accuracy threshold?
     assert error_mag < VELOCITY_ERROR_THRESHOLD_M_PER_S, "Derivative is not accurate enough"
 
 
