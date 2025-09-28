@@ -1,15 +1,14 @@
 import jax
-
 jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
-from sgp4.model import Satrec as vSatrec
 from datetime import datetime, timedelta
+
+from sgp4.model import Satrec as Satrec_original
 from sgpax.helper import jday
 from sgpax.model import Satrec
 
-import scienceplots
 import matplotlib.pyplot as plt
-
 plt.style.use(["science", "ieee"])
 
 
@@ -46,7 +45,7 @@ def print_sat_elems(sat, vanilla_sat):
 
 if __name__ == "__main__":
     sat = init_test_from_tle(Satrec)
-    v_sat = init_test_from_tle(vSatrec)
+    v_sat = init_test_from_tle(Satrec_original)
 
     minutes = list(range(0, 24 * 60, 1))
     errors = []

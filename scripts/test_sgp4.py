@@ -1,10 +1,11 @@
+import jax
+jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
 from sgp4.model import Satrec as vSatrec
 from datetime import datetime, timedelta
 from sgpax.helper import jday
 from sgpax.model import Satrec
-import jax
-jax.config.update("jax_enable_x64", True)
 
 
 def init_test_from_tle(satrec_class):
@@ -44,16 +45,22 @@ def test_compare_against_python_sgp4():
     v_sat = init_test_from_tle(vSatrec)
 
     for i in range(1, 40, 5):
-        print("VANILLA")
+
+        # Simulate orbits
         ve, vr, vv = return_result_after_hours(v_sat, i)
-        print("SGPAX")
         e, r, v = return_result_after_hours(sat, i)
+        
         # Compare accuracy
-        print("After ", i, "hours")
         position_error_m = (r - jnp.array(vr)) * 1e3
-        print("error in position metres", position_error_m)
-        vel_error_m = (v - jnp.array(vv)) * 1e3
-        print("error in velocity ", vel_error_m)
+        velocity_error_ms = (v - jnp.array(vv)) * 1e3
+        position_error_mag = jnp.linalg.norm(position_error_m)
+        velocity_error_mag = jnp.linalg.norm(velocity_error_ms)
+        
+        print("After ", i, "hours")
+        print("Error in position (m):      ", position_error_m)
+        print("Error in velocity (m/s):    ", velocity_error_ms)
+        print("Total position error (m):   ", position_error_mag)
+        print("Total velocity error (m/s): ", velocity_error_mag, "\n")
 
         pos_err = jnp.linalg.norm(position_error_m)
         assert pos_err < POSITION_ERROR_THRESHOLD_M, "Not accurate enough compared to reference! Check 64 bit float accuracy is turned on"
