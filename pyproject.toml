@@ -1,29 +1,33 @@
-[tool.poetry]
+[project]
 name = "sgpax"
 version = "0.1.2"
 description = "Differentiable orbital routines"
-authors = ["Raghav Mishra <rmis0704@uni.sydney.edu.au>"]
+authors = [{ name = "Raghav Mishra", email = "rmis0704@uni.sydney.edu.au" }]
+requires-python = "~=3.11"
 readme = "README.md"
+dependencies = [
+    "equinox==0.11.7",
+    "jax[cuda12]>=0.5,<0.6",
+    "jaxtyping>=0.3",
+    "matplotlib>=3.10.0",
+    "numpy>=2.2.1",
+    "optimistix>=0.0.10",
+    "packaging>=24.2",
+    "pillow>=11.1",
+    "scipy>=1.15",
+    "six>=1.17.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-equinox = "0.11.7"
-jax = {version="^0.5", extras=["cuda12"]}
-jaxtyping = ">=0.3"
-matplotlib = ">=3.10.0"
-numpy = ">=2.2.1"
-optimistix = ">=0.0.10"
-packaging = ">=24.2"
-pillow = ">=11.1"
-scipy = ">=1.15"
-six = ">=1.17.0"
-scienceplots = "^2.1.1"
 
-[tool.poetry.group.test.dependencies]
-sgp4 = "^2.24"
-pytest = "^8.3.5"
+[dependency-groups]
+test = [
+    "sgp4~=2.24",
+    "pytest>=8.3.5,<9",
+]
 
+[tool.uv]
+default-groups = ["test"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
